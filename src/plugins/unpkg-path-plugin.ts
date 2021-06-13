@@ -1,23 +1,16 @@
-import axios, { AxiosResponse } from 'axios';
 import * as esbuild from 'esbuild-wasm';
-import localForage from 'localforage';
 
-const fileCache = localForage.createInstance({ name: 'filecache' });
-
-export const unpkgPathPlugin = (inputCode: string) => {
+export const unpkgPathPlugin = () => {
   return {
     name: 'unpkg-path-plugin',
     setup(build: esbuild.PluginBuild) {
-      // handle root entry file of index.js
-      build.onResolve({ filter: /(^index\.js$)/ }, (args: any) => {
-        return {
-          path: 'index.js',
-          namespace: 'a',
-        };
+      // Handle root entry file of 'index.js'
+      build.onResolve({ filter: /(^index\.js$)/ }, () => {
+        return { path: 'index.js', namespace: 'a' };
       });
 
-      // handle  relative paths in a module
-      build.onResolve({ filter: /^\.+\// }, async (args: any) => {
+      // Handle relative paths in a module
+      build.onResolve({ filter: /^\.+\// }, (args: any) => {
         return {
           namespace: 'a',
           path: new URL(args.path, 'https://unpkg.com' + args.resolveDir + '/')
@@ -25,43 +18,12 @@ export const unpkgPathPlugin = (inputCode: string) => {
         };
       });
 
-      // handle main file of a module
+      // Handle main file of a module
       build.onResolve({ filter: /.*/ }, async (args: any) => {
         return {
           namespace: 'a',
           path: `https://unpkg.com/${args.path}`,
         };
-      });
-
-      build.onLoad({ filter: /.*/ }, async (args: any) => {
-        console.log('onLoad', args);
-
-        if (args.path === 'index.js') {
-          return {
-            loader: 'jsx',
-            contents: inputCode,
-          };
-        }
-
-        const cachedResult = await fileCache.getItem<esbuild.OnLoadResult>(
-          args.path
-        );
-
-        if (cachedResult) {
-          return cachedResult;
-        }
-
-        const { data, request }: AxiosResponse = await axios.get(args.path);
-
-        const result: esbuild.OnLoadResult = {
-          loader: 'jsx',
-          contents: data,
-          resolveDir: new URL('./', request.responseURL).pathname,
-        };
-
-        await fileCache.setItem(args.path, result);
-
-        return result;
       });
     },
   };
